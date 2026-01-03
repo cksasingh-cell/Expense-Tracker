@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>Expense Tracker v9.3 - Personal Tab</title>
+    <title>Expense Tracker v10.0 - Settlement Tracker</title>
     
     <!-- PWA Configuration -->
     <link rel="manifest" href="manifest.json">
@@ -842,6 +842,132 @@
             margin-left: 8px;
             font-weight: 700;
         }
+
+        /* Settlement Tracker Styles */
+        .settlement-container {
+            padding: 0;
+        }
+
+        .settlement-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 2px solid #e5e7eb;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .settlement-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .settlement-info {
+            flex: 1;
+        }
+
+        .settlement-amount {
+            font-size: 28px;
+            font-weight: 800;
+            color: #ef4444;
+            margin-bottom: 4px;
+        }
+
+        .settlement-amount.positive {
+            color: #10b981;
+        }
+
+        .settlement-description {
+            font-size: 15px;
+            color: #6b7280;
+            font-weight: 600;
+        }
+
+        .settlement-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .settlement-status {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .settlement-status.pending {
+            background: #fef3c7;
+            color: #f59e0b;
+            border: 2px solid #fde68a;
+        }
+
+        .settlement-status.paid {
+            background: #d1fae5;
+            color: #10b981;
+            border: 2px solid #a7f3d0;
+        }
+
+        .mark-paid-btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .mark-paid-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+
+        .mark-paid-btn:active {
+            transform: scale(0.98);
+        }
+
+        .undo-btn {
+            background: #f3f4f6;
+            color: #6b7280;
+            border: 2px solid #e5e7eb;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .undo-btn:hover {
+            background: #e5e7eb;
+            border-color: #d1d5db;
+        }
+
+        .settlement-equal {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            border: 2px solid #d1fae5;
+        }
+
+        .settlement-equal-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .settlement-equal-text {
+            font-size: 18px;
+            font-weight: 700;
+            color: #10b981;
+        }
     </style>
 </head>
 <body>
@@ -910,6 +1036,12 @@
                     </div>
                     <div id="monthly-list"></div>
                 </div>
+
+                <!-- Monthly Review: Settlement Tracker -->
+                <div class="section" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 2px solid #10b981;">
+                    <h2>💰 Monthly Review: Settlement</h2>
+                    <div id="monthly-settlement" class="settlement-container"></div>
+                </div>
             </div>
 
             <!-- Travel Tab -->
@@ -945,6 +1077,12 @@
                     </div>
                     <div id="travel-list"></div>
                 </div>
+
+                <!-- Monthly Review: Settlement Tracker -->
+                <div class="section" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #f59e0b;">
+                    <h2>💰 Monthly Review: Settlement</h2>
+                    <div id="travel-settlement" class="settlement-container"></div>
+                </div>
             </div>
 
             <!-- Personal Tab -->
@@ -974,7 +1112,7 @@
             
             <!-- Version Info -->
             <div style="text-align: center; padding: 20px 10px 10px 10px; color: rgba(255, 255, 255, 0.7); font-size: 11px; font-weight: 600;">
-                Version 9.3 - Personal Tab
+                Version 10.0 - Settlement Tracker
             </div>
         </div>
     </div>
@@ -1856,7 +1994,101 @@
                 
                 document.getElementById(`${type}-list`).innerHTML = (listHTML || 
                     `<div class="empty-state"><div class="empty-state-icon">📭</div><div>No transactions in ${displayMonth}. Tap + to add!</div></div>`) + viewMoreBtn;
+                
+                // Render settlement for monthly and travel tabs
+                if (type === 'monthly' || type === 'travel') {
+                    renderSettlement(type, chandanTotal, arpitaTotal, displayMonth);
+                }
             });
+        }
+
+        // Settlement tracking - stored in localStorage per month
+        function getSettlementKey(type, month) {
+            return `settlement_${type}_${month}`;
+        }
+
+        function getSettlementStatus(type, month) {
+            const key = getSettlementKey(type, month);
+            const stored = localStorage.getItem(key);
+            return stored ? JSON.parse(stored) : { paid: false, paidAt: null };
+        }
+
+        function setSettlementStatus(type, month, paid) {
+            const key = getSettlementKey(type, month);
+            const status = {
+                paid: paid,
+                paidAt: paid ? new Date().toISOString() : null
+            };
+            localStorage.setItem(key, JSON.stringify(status));
+            updateDisplay();
+        }
+
+        function renderSettlement(type, chandanTotal, arpitaTotal, displayMonth) {
+            const container = document.getElementById(`${type}-settlement`);
+            const total = chandanTotal + arpitaTotal;
+            const half = total / 2;
+            
+            // Check settlement status
+            const settlementStatus = getSettlementStatus(type, displayMonth);
+            
+            if (total === 0) {
+                container.innerHTML = '<div class="settlement-equal" style="background: #f9fafb; border-color: #e5e7eb;"><div class="settlement-equal-icon">📭</div><div class="settlement-equal-text" style="color: #6b7280;">No expenses this month</div></div>';
+                return;
+            }
+            
+            const difference = Math.abs(chandanTotal - arpitaTotal);
+            
+            if (difference < 1) {
+                // Equal split
+                container.innerHTML = `
+                    <div class="settlement-equal">
+                        <div class="settlement-equal-icon">✅</div>
+                        <div class="settlement-equal-text">Perfect! Both paid equally</div>
+                        <div style="margin-top: 8px; color: #6b7280; font-size: 14px;">Chandan: ₹${chandanTotal.toLocaleString('en-IN')} • Arpita: ₹${arpitaTotal.toLocaleString('en-IN')}</div>
+                    </div>
+                `;
+            } else {
+                // Someone owes
+                const whoPaid = chandanTotal > arpitaTotal ? 'Chandan' : 'Arpita';
+                const whoOwes = chandanTotal > arpitaTotal ? 'Arpita' : 'Chandan';
+                const oweAmount = difference / 2;
+                
+                container.innerHTML = `
+                    <div class="settlement-card">
+                        <div class="settlement-header">
+                            <div class="settlement-info">
+                                <div class="settlement-amount ${settlementStatus.paid ? 'positive' : ''}">${settlementStatus.paid ? '✅' : '💸'} ₹${Math.round(oweAmount).toLocaleString('en-IN')}</div>
+                                <div class="settlement-description">
+                                    <strong>${whoOwes}</strong> ${settlementStatus.paid ? 'paid' : 'owes'} <strong>${whoPaid}</strong>
+                                </div>
+                                <div style="margin-top: 8px; font-size: 13px; color: #9ca3af;">
+                                    ${whoPaid} paid: ₹${(chandanTotal > arpitaTotal ? chandanTotal : arpitaTotal).toLocaleString('en-IN')} • 
+                                    ${whoOwes} paid: ₹${(chandanTotal > arpitaTotal ? arpitaTotal : chandanTotal).toLocaleString('en-IN')}
+                                </div>
+                                ${settlementStatus.paid && settlementStatus.paidAt ? `<div style="margin-top: 8px; font-size: 12px; color: #10b981; font-weight: 600;">✓ Settled on ${new Date(settlementStatus.paidAt).toLocaleDateString('en-IN')}</div>` : ''}
+                            </div>
+                            <div class="settlement-actions">
+                                ${!settlementStatus.paid ? 
+                                    `<button class="mark-paid-btn" onclick="markAsPaid('${type}', '${displayMonth}')">Mark as Paid</button>` :
+                                    `<button class="undo-btn" onclick="undoPayment('${type}', '${displayMonth}')">Undo</button>`
+                                }
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function markAsPaid(type, month) {
+            if (confirm('Mark this settlement as paid?')) {
+                setSettlementStatus(type, month, true);
+            }
+        }
+
+        function undoPayment(type, month) {
+            if (confirm('Undo this payment?')) {
+                setSettlementStatus(type, month, false);
+            }
         }
 
 
